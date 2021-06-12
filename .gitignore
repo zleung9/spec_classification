@@ -1,0 +1,4 @@
+*.pyc
+large_data
+.ipynb_checkpoints
+
