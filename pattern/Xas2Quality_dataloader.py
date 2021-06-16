@@ -22,11 +22,12 @@ class Xas2QualityDataset(Dataset):
 
         # only select label<0.001 or label>0.009 as valid data
         self.spec = spec[:, feature_range]
-        self.spec_label = label
+        self.spec_label = label.reshape(-1,1)
         select_label = (self.spec_label>=0) & ((1-1e-3<self.spec_label)|(self.spec_label<0+1e-3))
-        self.data = self.spec[select_label]
-        self.label = self.spec_label[select_label]
+        self.data = self.spec[select_label.flatten()] # flatten() reduces dimension from 2 to 1
+        self.label = self.spec_label[select_label.flatten()]
         self.sample_size = self.label.shape[0]
+        assert self.label.shape[1] == 1 # assert self.label has two dimensions
 
         if verbose:
             print("Orignal Label\n1: {:d}, 0: {:d}, -1: {:d}"
@@ -117,7 +118,8 @@ def get_Xas2Quality_dataloaders(dataset, batch_size, ratio=(0.7, 0.15, 0.15), lo
     # create a dataloader for unlabeled data for extreme prob. reduction (see Trainer.train())
     if load_unlabel: 
         index_all = np.arange(len(dataset.spec))
-        index_unlabeled = index_all[dataset.spec_label==-1]
+        select_unlabeled = (dataset.spec_label==-1).flatten()
+        index_unlabeled = index_all[select_unlabeled]
         ds_unlabeled = Subset(dataset, index_unlabeled)
         unlabel_loader = DataLoader(ds_unlabeled, batch_size=batch_size, num_workers=0, pin_memory=False)
         return train_loader, val_loader, test_loader, unlabel_loader
