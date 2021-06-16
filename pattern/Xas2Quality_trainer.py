@@ -78,7 +78,7 @@ class Trainer:
                 perc30, perc70 = torch.quantile(y_pred, tensor([0.3,0.7]).to(device=self.device))
                 invalid_pred30 = y_pred[(y_pred>perc30) & (y_pred<0.3)]
                 loss_perc30 = self.loss_BCE(invalid_pred30, torch.full_like(invalid_pred30, fill_value=0.30))
-                invalid_pred70 = y_pred[(y_red<perc70) & (y_pred>0.7)]
+                invalid_pred70 = y_pred[(y_pred<perc70) & (y_pred>0.7)]
                 loss_perc70 = self.loss_BCE(invalid_pred70, torch.full_like(invalid_pred70, full_value=0.70))
                 loss_center = (loss_perc30 + loss_perc70) * 0.5 # avoid distorting the good result too much
                 loss_center.backward()
@@ -104,7 +104,7 @@ class Trainer:
                 pass
             if self.verbose and epoch%100==99:
                 print('Epoch {:d}/{:d} | loss: {:.3f}/{:.3f}'
-                      .format(epoch+1, self.max_epochs, train_loss[epoch],val_loss[epoch]))    
+                      .format(epoch+1, self.max_epochs, self.train_loss[epoch],self.val_loss[epoch]))    
         try: 
             writer.flush() # flush the writer opject
         except:
