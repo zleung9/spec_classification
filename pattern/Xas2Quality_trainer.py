@@ -54,24 +54,24 @@ class Trainer:
             self.model.train() # set to training mode
 
 
-            loss_train_list = []
+            loss_train_list = [] # list of training loss of each batch for the current epoch
             #train_loader can only be exhausted if its length < that of loss_constrain_loader
             for trn, tst in zip(self.train_loader, self.loss_constrain_loader):
                 spec_in, label_in = trn
-                spec_in = spec_in.to(self.device)
-                label_in = label_in.to(self.device)
+                spec_in = spec_in.to(self.device).float()
+                label_in = label_in.to(self.device).float()
 
                 self.model.zero_grad()
                 label_pred = self.model(spec_in)
                 loss = self.loss_BCE(label_pred, label_in)
-                loss_train_list.append(loss) # list of training loss for the current epoch
+                loss_train_list.append(loss.detach().cpu().numpy()) 
                 loss.backward()
                 self.solver.step()
 
                 # this part tries to minimize loss w.r.t. 0.3 & 0.7 so predictions are pulled to center
                 spec_tst, label_tst = tst
-                spec_tst = spec_tst.to(self.device)
-                label_tst = label_tst.to(self.device)
+                spec_tst = spec_tst.to(self.device).float()
+                label_tst = label_tst.to(self.device).float()
                 self.model.zero_grad()
                 y_pred = self.model(spec_tst).to(device=self.device)
                 # only predictions that fall in [perc30, perc70] (not-so-sure predictions) are affected.
@@ -79,20 +79,20 @@ class Trainer:
                 invalid_pred30 = y_pred[(y_pred>perc30) & (y_pred<0.3)]
                 loss_perc30 = self.loss_BCE(invalid_pred30, torch.full_like(invalid_pred30, fill_value=0.30))
                 invalid_pred70 = y_pred[(y_pred<perc70) & (y_pred>0.7)]
-                loss_perc70 = self.loss_BCE(invalid_pred70, torch.full_like(invalid_pred70, full_value=0.70))
+                loss_perc70 = self.loss_BCE(invalid_pred70, torch.full_like(invalid_pred70, fill_value=0.70))
                 loss_center = (loss_perc30 + loss_perc70) * 0.5 # avoid distorting the good result too much
                 loss_center.backward()
                 self.solver.step()
 
             # caculate the loss for validition set.
             self.model.eval()
-            loss_val_list = []
+            loss_val_list = [] # list of validation loss of each batch for the current epoch
             for spec_in, label_in in self.val_loader:
-                spec_in = spec_in.to(self.device)
-                label_in = label_in.to(self.device)
+                spec_in = spec_in.to(self.device).float()
+                label_in = label_in.to(self.device).float()
                 label_pred = self.model(spec_in)
                 loss = self.loss_BCE(label_pred, label_in)
-                loss_val_list.append(loss) # list of validation loss for the current epoch
+                loss_val_list.append(loss.detach().cpu().numpy()) 
                 
             self.train_loss[epoch] = np.mean(loss_train_list)
             self.val_loss[epoch] = np.mean(loss_val_list)
