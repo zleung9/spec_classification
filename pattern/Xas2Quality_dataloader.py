@@ -11,8 +11,13 @@ from torch.utils.data.sampler import WeightedRandomSampler
 from torch.utils.tensorboard import SummaryWriter
 class Xas2QualityDataset(Dataset):
     def __init__(self, spec, label, feature, energy_cut, verbose=False):
+        '''
+        DOC
+        '''
+        ### TODO: make untailored data (contains label -1) only visible within class. 
+
         super(Xas2QualityDataset, self).__init__()
-        
+        assert label.shape[1] == 1 # label should have shape (N,1)
         self.verbose = verbose
 
         # select a certain range of features for training
@@ -22,12 +27,14 @@ class Xas2QualityDataset(Dataset):
 
         # only select label<0.001 or label>0.009 as valid data
         self.spec = spec[:, feature_range]
-        self.spec_label = label.reshape(-1,1)
+        self.spec_label = label
+
         select_label = (self.spec_label>=0) & ((1-1e-3<self.spec_label)|(self.spec_label<0+1e-3))
-        self.data = self.spec[select_label.flatten()] # flatten() reduces dimension from 2 to 1
-        self.label = self.spec_label[select_label.flatten()]
+        select_label = select_label.flatten()
+        self.data = self.spec[select_label] # flatten() reduces dimension from 2 to 1
+        self.label = self.spec_label[select_label]
         self.sample_size = self.label.shape[0]
-        assert self.label.shape[1] == 1 # assert self.label has two dimensions
+        
 
         if verbose:
             print("Orignal Label\n1: {:d}, 0: {:d}, -1: {:d}"
@@ -35,8 +42,9 @@ class Xas2QualityDataset(Dataset):
         
         # create a weight sequence of good and  d data according to their fractions
         good_mask, bad_mask = self.label>0.5, self.label<0.5
-        self.weights = good_mask * bad_mask.sum() + bad_mask * good_mask.sum()
-        
+        weights = good_mask * bad_mask.sum() + bad_mask * good_mask.sum()
+        self.weights = weights.flatten() # reduce dimension from 
+        assert len(self.weights.shape) == 1 # assert self.weight is a 1-D vector.
         # data is not partitioned into train, test, validation sets by default
         self.has_partition = False
 
@@ -90,7 +98,7 @@ class Xas2QualityDataset(Dataset):
         # # get rid of labels that fall in between [0.1, 0.9]
         # label_select = (labels>=0.9) | (labels<=0.1)
 
-        return Xas2QualityDataset(spec=red_norm, label=labels, feature=feature_grid,
+        return Xas2QualityDataset(spec=red_norm, label=labels.reshape(-1,1), feature=feature_grid,
                                   energy_cut=energy_cut, verbose=verbose)
 
    
@@ -125,3 +133,17 @@ def get_Xas2Quality_dataloaders(dataset, batch_size, ratio=(0.7, 0.15, 0.15), lo
         return train_loader, val_loader, test_loader, unlabel_loader
 
     return train_loader, val_loader, test_loader 
+
+
+
+
+if __name__ == "__main__":
+    import os
+    print("CWD: {:s}".format(os.getcwd()))
+    data_folder = os.path.join(os.getcwd(),"large_data")
+    spec = Xas2QualityDataset.from_file(spec_file=os.path.join(data_folder,"e7600-8000_grid400_spec_norm.pkl"),
+                                    quality_file=os.path.join(data_folder,"e7600-8000_grid400_prediction.pkl"),
+                                    energy_cut=(7600,7900))
+    train_loader, test_loader, val_loader, unlabel_loader = \
+        get_Xas2Quality_dataloaders(spec, batch_size=100,load_unlabel=True)
+    pass
