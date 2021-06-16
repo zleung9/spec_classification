@@ -24,10 +24,6 @@ class Xas2QualityFCN(nn.Module):
             nn.ReLU(),
             nn.Dropout(p=dropout_rate),
             nn.BatchNorm1d(32, affine=False),
-            # nn.Linear(32,32),
-            # nn.ReLU(),
-            # nn.Dropout(p=dropout_rate),
-            # nn.BatchNorm1d(32, affine=False),
             nn.Linear(32,16),
             nn.ReLU(),
             nn.Dropout(p=dropout_rate),
@@ -35,11 +31,12 @@ class Xas2QualityFCN(nn.Module):
             nn.Linear(16,output_size),
             nn.Sigmoid()
         )   
+
     def forward(self, spec_in):
         return self.main(spec_in)
 
-    @staticmethod
-    def reset_weights(cls, m, verbose=False):
+    @classmethod
+    def reset_weights(cls, m: nn.Module, verbose=False):
         '''
         Try resetting model weights to avoid
         weight leakage.
