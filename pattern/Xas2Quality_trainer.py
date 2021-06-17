@@ -37,7 +37,8 @@ class Trainer:
         self.solver: optim.Optimizer = optim.RMSprop(model.parameters(), lr=self.learning_rate)
         # zero_grad
 
-    def train(self):
+
+    def train(self, after=200):
 
         if self.tensorboard:
             writer = SummaryWriter(comment="_train_all-bvs")
@@ -97,6 +98,9 @@ class Trainer:
             self.train_loss[epoch] = np.mean(loss_train_list)
             self.val_loss[epoch] = np.mean(loss_val_list)
 
+            # exit when it starts to overfit
+            if self.overfit(epoch, window=after): break 
+
             try:
                 writer.add_scalar("Loss/train", self.train_loss[epoch], epoch) 
                 writer.add_scalar("Loss/val", self.val_loss[epoch], epoch)
@@ -114,5 +118,15 @@ class Trainer:
             print("Total time: {:.1f} min.".format((time.time()-start)/60))  
 
 
-    def test(self):
-        pass
+    def overfit(self, epoch, window=100):
+        if epoch<window+1:
+            return False
+        else:
+            train_loss_now = self.train_loss[-window:].mean()
+            val_loss_now = self.val_loss[-window:].mean()
+            val_loss_pre = self.val_loss[-window-1:-1].mean()
+            if (val_loss_now < val_loss_pre) and (val_loss_now < train_loss_now):
+                return False
+            else:
+                return True
+            

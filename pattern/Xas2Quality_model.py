@@ -1,19 +1,14 @@
-import torch
-from torch import nn, Tensor, optim
+import numpy as np
+from torch import nn
 from torch.utils.data import Dataset, DataLoader
 
-import os, glob, pickle
-import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
-import time
-
-from torch.utils.tensorboard import SummaryWriter
 
 class Xas2QualityFCN(nn.Module):
     def __init__(self, input_size, output_size, dropout_rate=0.4):
         super(Xas2QualityFCN, self).__init__()
-        
+        self.input_size = input_size
+        self.output_size = output_size
+
         self.main = nn.Sequential(
             nn.BatchNorm1d(input_size, affine=False),
             nn.Linear(input_size,128),
@@ -33,15 +28,16 @@ class Xas2QualityFCN(nn.Module):
         )   
 
     def forward(self, spec_in):
+        assert len(spec_in.shape) == 2 # 2D matrix of shape [N,L]
+        assert spec_in.shape[1] == self.input_size 
         return self.main(spec_in)
 
-    @classmethod
-    def reset_weights(cls, m: nn.Module, verbose=False):
+    def reset_weights(self, verbose=False):
         '''
         Try resetting model weights to avoid
         weight leakage.
         '''
-        for layer in m.children():
+        for layer in self.main.children():
             if hasattr(layer, 'reset_parameters'):
                 if verbose: print(f'Reset trainable parameters of layer = {layer}')
                 layer.reset_parameters()
@@ -50,7 +46,8 @@ class Xas2QualityFCN(nn.Module):
 class Xas2QualityCNN(nn.Module):
     def __init__(self, output_size, dropout_rate=0.4):
         super(Xas2QualityCNN, self).__init__()
-        
+        self.output_size = output_size
+
         self.main = nn.Sequential(
             nn.Conv1d(in_channels=1, out_channels=8, kernel_size=4, stride=2, padding=1, padding_mode='replicate'),
             nn.ReLU(),
@@ -81,5 +78,8 @@ class Xas2QualityCNN(nn.Module):
         )
 
     def forward(self, spec_in):
+        if len(spec_in.shape) == 2: # if input has shape [N, L], add channel dimension
+            spec_in = spec_in[:,np.newaxis,:] 
+        assert len(spec_in.shape) == 3 # make sure
         return self.main(spec_in)
     
