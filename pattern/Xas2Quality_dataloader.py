@@ -32,14 +32,7 @@ class Xas2QualityDataset(Dataset):
             print("Orignal Label\n1: {:d}, 0: {:d}, -1: {:d}"
                   .format((self.label>0.5).sum(),(self.label<0.5).sum(),(self.spec_label==-1).sum()))
         
-        # create a weight sequence of good and  d data according to their fractions
-        good, bad, unlabeled = self.label>0.5, (self.label<0.5)
-        weights = good_mask * bad_mask.sum() + bad_mask * good_mask.sum()
-        self.weights = weights.flatten() # reduce dimension from 
-        assert len(self.weights.shape) == 1 # assert self.weight is a 1-D vector.
-        # data is not partitioned into train, test, validation sets by default
-        self.has_partition = False
-
+        
 
     def __len__(self):
         return self.data.shape[0]
@@ -62,21 +55,23 @@ class Xas2QualityDataset(Dataset):
         select_labeled = select_good | select_bad # label = 0 or 1
         
         index_total = np.arange(self.sample_size)
-        index_labeled = index_total[select_labeled]
-        index_unlabeled = index_total[select_unlabeled]
+        index_labeled = index_total[select_labeled] # select out the index of labeled data
+        index_unlabeled = index_total[select_unlabeled] # select out the index of unlabeled data
 
-        N_labeled = select_labeled.sum()
-        N_train = int(np.floor(N_labeled * ratio[0]))
-        N_test = int(np.floor(N_labeled * ratio[1]))
-        N_val = N_labeled - N_train - N_test
+        N_labeled = select_labeled.sum() # number of labeled data
+        N_train = int(np.floor(N_labeled * ratio[0])) # size of train set
+        N_test = int(np.floor(N_labeled * ratio[1])) # size of test set
+        N_val = N_labeled - N_train - N_test # size of val set
 
-        index_shuffle = np.random.permutation(index_labeled) # shuffle data and label
+        index_shuffle = np.random.permutation(index_labeled) # shuffle labeled data and label
         self.index_train = index_shuffle[:N_train]
         self.index_test = index_shuffle[N_train: N_train+N_test]
         self.index_val = index_shuffle[-N_val:]
         self.index_unlabeled = index_unlabeled
 
-        self.has_partition = True
+
+        
+        self.has_partition = True # set the partition flag to be True
     
 
     @classmethod
