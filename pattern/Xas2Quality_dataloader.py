@@ -119,7 +119,6 @@ def get_Xas2Quality_dataloaders(dataset, batch_size, ratio=(0.7, 0.15, 0.15), un
 
     train_sampler = WeightedRandomSampler(dataset.weights[dataset.index_train], replacement=True,
                                           num_samples=math.ceil(len(ds_train)/batch_size)*batch_size)
-
     train_loader = DataLoader(ds_train, batch_size=batch_size, num_workers=0, pin_memory=False,
                               sampler=train_sampler)
     val_loader = DataLoader(ds_val, batch_size=batch_size, num_workers=0, pin_memory=False)
@@ -128,8 +127,7 @@ def get_Xas2Quality_dataloaders(dataset, batch_size, ratio=(0.7, 0.15, 0.15), un
     # create a dataloader for unlabeled data for extreme prob. reduction (see Trainer.train())
     if unlabel_batch_size != 0: 
         ds_unlabeled = Subset(dataset, dataset.index_unlabeled)
-        unlabel_sampler = RandomSampler(ds_unlabeled, replacement=True, # length = len(train_loader)
-                                        num_samples=unlabel_batch_size*len(train_loader)) 
+        unlabel_sampler = RandomSampler(ds_unlabeled, replacement=False)
         unlabel_loader = DataLoader(ds_unlabeled, batch_size=unlabel_batch_size, sampler=unlabel_sampler,
                                     num_workers=0, pin_memory=False)
         return train_loader, val_loader, test_loader, unlabel_loader
