@@ -35,13 +35,12 @@ class Xas2QualityFCN(nn.Module):
     def forward(self, spec_in):
         return self.main(spec_in)
 
-    @classmethod
-    def reset_weights(cls, m: nn.Module, verbose=False):
+    def reset_weights(self, verbose=False):
         '''
         Try resetting model weights to avoid
         weight leakage.
         '''
-        for layer in m.children():
+        for layer in self.main.children():
             if hasattr(layer, 'reset_parameters'):
                 if verbose: print(f'Reset trainable parameters of layer = {layer}')
                 layer.reset_parameters()

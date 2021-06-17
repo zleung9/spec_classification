@@ -26,13 +26,16 @@ class Xas2QualityDataset(Dataset):
         self.data = spec[:, feature_range]
         self.label = label
         self.sample_size = self.label.shape[0]
-        
+        self.weights = np.ones(self.sample_size) # weights are set to 1 by default
 
         if verbose:
+            select_unlabeled = self.label.flatten()==-1 # label = -1
+            select_good = 1-1e-3<self.label.flatten() # label = 1
+            select_bad = (self.label.flatten()<0+1e-3) & (self.label.flatten()>=0) # label = 0
             print("Orignal Label\n1: {:d}, 0: {:d}, -1: {:d}"
-                  .format((self.label>0.5).sum(),(self.label<0.5).sum(),(self.spec_label==-1).sum()))
+                  .format(select_good.sum(),select_bad.sum(),select_unlabeled.sum()))
         
-        
+        self.has_partition = False # has_partition flag is set to False by default
 
     def __len__(self):
         return self.data.shape[0]
@@ -53,7 +56,8 @@ class Xas2QualityDataset(Dataset):
         select_good = 1-1e-3<self.label.flatten() # label = 1
         select_bad = (self.label.flatten()<0+1e-3) & (self.label.flatten()>=0) # label = 0
         select_labeled = select_good | select_bad # label = 0 or 1
-        
+        assert select_unlabeled.sum()+select_labeled.sum() == self.sample_size # exhaustive test
+
         index_total = np.arange(self.sample_size)
         index_labeled = index_total[select_labeled] # select out the index of labeled data
         index_unlabeled = index_total[select_unlabeled] # select out the index of unlabeled data
@@ -69,7 +73,9 @@ class Xas2QualityDataset(Dataset):
         self.index_val = index_shuffle[-N_val:]
         self.index_unlabeled = index_unlabeled
 
-
+        # create a weight list to be used by WeightedRandomSampler
+        self.weights = select_good/select_good.sum() + select_bad/select_bad.sum() \
+                     + select_unlabeled/select_unlabeled.sum()
         
         self.has_partition = True # set the partition flag to be True
     
@@ -100,7 +106,7 @@ class Xas2QualityDataset(Dataset):
    
 
 def get_Xas2Quality_dataloaders(dataset, batch_size, ratio=(0.7, 0.15, 0.15), unlabel_batch_size=0):
-    ### TODO: unlabeled dataset still uses labeled __getitem__() function for incexing, to solve
+    
     # partition the totald dataset into train,validation and test sets according to ratio
     dataset.partition(ratio=ratio)
     if not dataset.has_partition: # has_partion attribute is only turned on after partition
@@ -110,7 +116,6 @@ def get_Xas2Quality_dataloaders(dataset, batch_size, ratio=(0.7, 0.15, 0.15), un
         ds_train = Subset(dataset, dataset.index_train)
         ds_test = Subset(dataset, dataset.index_test)
         ds_val = Subset(dataset, dataset.index_val)
-        print(len(ds_train), len(ds_test), len(ds_val))
 
     train_sampler = WeightedRandomSampler(dataset.weights[dataset.index_train], replacement=True,
                                           num_samples=math.ceil(len(ds_train)/batch_size)*batch_size)
@@ -122,21 +127,17 @@ def get_Xas2Quality_dataloaders(dataset, batch_size, ratio=(0.7, 0.15, 0.15), un
 
     # create a dataloader for unlabeled data for extreme prob. reduction (see Trainer.train())
     if unlabel_batch_size != 0: 
-        index_all = np.arange(len(dataset.spec))
-        select_unlabel = (dataset.spec_label==-1).flatten()
-        index_unlabel = index_all[select_unlabel]
-        ds_unlabel = Subset(dataset, index_unlabel)
-        unlabel_sampler = RandomSampler(ds_unlabel, replacement=True,
-                          num_samples=unlabel_batch_size*len(train_loader)) # length = len(train_loader)
-        unlabel_loader = DataLoader(ds_unlabel, batch_size=unlabel_batch_size, sampler=unlabel_sampler,
+        ds_unlabeled = Subset(dataset, dataset.index_unlabeled)
+        unlabel_sampler = RandomSampler(ds_unlabeled, replacement=True, # length = len(train_loader)
+                                        num_samples=unlabel_batch_size*len(train_loader)) 
+        unlabel_loader = DataLoader(ds_unlabeled, batch_size=unlabel_batch_size, sampler=unlabel_sampler,
                                     num_workers=0, pin_memory=False)
         return train_loader, val_loader, test_loader, unlabel_loader
 
     return train_loader, val_loader, test_loader 
 
 
-
-
+# test this script
 if __name__ == "__main__":
     import os
     print("CWD: {:s}".format(os.getcwd()))
