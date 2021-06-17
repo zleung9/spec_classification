@@ -5,7 +5,7 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset, DataLoader
 from torch.utils.data.dataset import Subset
-from torch.utils.data.sampler import WeightedRandomSampler
+from torch.utils.data.sampler import WeightedRandomSampler, RandomSampler
 
 
 from torch.utils.tensorboard import SummaryWriter
@@ -103,8 +103,8 @@ class Xas2QualityDataset(Dataset):
 
    
 
-def get_Xas2Quality_dataloaders(dataset, batch_size, ratio=(0.7, 0.15, 0.15), load_unlabel=False):
-    
+def get_Xas2Quality_dataloaders(dataset, batch_size, ratio=(0.7, 0.15, 0.15), unlabel_batch_size=0):
+    ### TODO: unlabeled dataset still uses labeled __getitem__() function for incexing, to solve
     # partition the totald dataset into train,validation and test sets according to ratio
     dataset.partition(ratio=ratio)
     if not dataset.has_partition: # has_partion attribute is only turned on after partition
@@ -124,12 +124,15 @@ def get_Xas2Quality_dataloaders(dataset, batch_size, ratio=(0.7, 0.15, 0.15), lo
     test_loader = DataLoader(ds_test, batch_size=batch_size, num_workers=0, pin_memory=False)
 
     # create a dataloader for unlabeled data for extreme prob. reduction (see Trainer.train())
-    if load_unlabel: 
+    if unlabel_batch_size != 0: 
         index_all = np.arange(len(dataset.spec))
-        select_unlabeled = (dataset.spec_label==-1).flatten()
-        index_unlabeled = index_all[select_unlabeled]
-        ds_unlabeled = Subset(dataset, index_unlabeled)
-        unlabel_loader = DataLoader(ds_unlabeled, batch_size=batch_size, num_workers=0, pin_memory=False)
+        select_unlabel = (dataset.spec_label==-1).flatten()
+        index_unlabel = index_all[select_unlabel]
+        ds_unlabel = Subset(dataset, index_unlabel)
+        unlabel_sampler = RandomSampler(ds_unlabel, replacement=True,
+                          num_samples=unlabel_batch_size*len(train_loader)) # length = len(train_loader)
+        unlabel_loader = DataLoader(ds_unlabel, batch_size=unlabel_batch_size, sampler=unlabel_sampler,
+                                    num_workers=0, pin_memory=False)
         return train_loader, val_loader, test_loader, unlabel_loader
 
     return train_loader, val_loader, test_loader 
