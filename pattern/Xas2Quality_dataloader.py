@@ -14,7 +14,6 @@ class Xas2QualityDataset(Dataset):
         '''
         DOC
         '''
-        ### TODO: make untailored data (contains label -1) only visible within class. 
 
         super(Xas2QualityDataset, self).__init__()
         assert label.shape[1] == 1 # label should have shape (N,1)
@@ -24,15 +23,8 @@ class Xas2QualityDataset(Dataset):
         feature_range = (feature>energy_cut[0])&(feature<energy_cut[1])
         self.feature = feature[feature_range]
         self.feature_size = self.feature.shape[0]
-
-        # only select label<0.001 or label>0.009 as valid data
-        self.spec = spec[:, feature_range]
-        self.spec_label = label
-
-        select_label = (self.spec_label>=0) & ((1-1e-3<self.spec_label)|(self.spec_label<0+1e-3))
-        select_label = select_label.flatten()
-        self.data = self.spec[select_label] # flatten() reduces dimension from 2 to 1
-        self.label = self.spec_label[select_label]
+        self.data = spec[:, feature_range]
+        self.label = label
         self.sample_size = self.label.shape[0]
         
 
@@ -41,7 +33,7 @@ class Xas2QualityDataset(Dataset):
                   .format((self.label>0.5).sum(),(self.label<0.5).sum(),(self.spec_label==-1).sum()))
         
         # create a weight sequence of good and  d data according to their fractions
-        good_mask, bad_mask = self.label>0.5, self.label<0.5
+        good, bad, unlabeled = self.label>0.5, (self.label<0.5)
         weights = good_mask * bad_mask.sum() + bad_mask * good_mask.sum()
         self.weights = weights.flatten() # reduce dimension from 
         assert len(self.weights.shape) == 1 # assert self.weight is a 1-D vector.
@@ -64,16 +56,25 @@ class Xas2QualityDataset(Dataset):
         '''
         Partition the dataset into train, validation and test set according to ratio.
         '''
-        N_samples = self.sample_size
+        select_unlabeled = self.label.flatten()==-1 # label = -1
+        select_good = 1-1e-3<self.label.flatten() # label = 1
+        select_bad = (self.label.flatten()<0+1e-3) & (self.label.flatten()>=0) # label = 0
+        select_labeled = select_good | select_bad # label = 0 or 1
+        
+        index_total = np.arange(self.sample_size)
+        index_labeled = index_total[select_labeled]
+        index_unlabeled = index_total[select_unlabeled]
 
-        N_train = int(np.floor(N_samples * ratio[0]))
-        N_test = int(np.floor(N_samples * ratio[1]))
-        N_val = N_samples - N_train - N_test
+        N_labeled = select_labeled.sum()
+        N_train = int(np.floor(N_labeled * ratio[0]))
+        N_test = int(np.floor(N_labeled * ratio[1]))
+        N_val = N_labeled - N_train - N_test
 
-        index_shuffle = np.random.permutation(range(N_samples)) # shuffle data and label
+        index_shuffle = np.random.permutation(index_labeled) # shuffle data and label
         self.index_train = index_shuffle[:N_train]
         self.index_test = index_shuffle[N_train: N_train+N_test]
         self.index_val = index_shuffle[-N_val:]
+        self.index_unlabeled = index_unlabeled
 
         self.has_partition = True
     
@@ -114,6 +115,7 @@ def get_Xas2Quality_dataloaders(dataset, batch_size, ratio=(0.7, 0.15, 0.15), un
         ds_train = Subset(dataset, dataset.index_train)
         ds_test = Subset(dataset, dataset.index_test)
         ds_val = Subset(dataset, dataset.index_val)
+        print(len(ds_train), len(ds_test), len(ds_val))
 
     train_sampler = WeightedRandomSampler(dataset.weights[dataset.index_train], replacement=True,
                                           num_samples=math.ceil(len(ds_train)/batch_size)*batch_size)
@@ -148,5 +150,5 @@ if __name__ == "__main__":
                                     quality_file=os.path.join(data_folder,"e7600-8000_grid400_prediction.pkl"),
                                     energy_cut=(7600,7900))
     train_loader, test_loader, val_loader, unlabel_loader = \
-        get_Xas2Quality_dataloaders(spec, batch_size=100,load_unlabel=True)
+        get_Xas2Quality_dataloaders(spec, batch_size=100,unlabel_batch_size=200)
     pass
